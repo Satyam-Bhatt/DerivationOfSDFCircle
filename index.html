@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Choosing ω₀ — Ellipse Distance Seed Visualizer</title>
+<style>
+  :root {
+    --bg: #faf9f6;
+    --panel: #ffffff;
+    --ink: #1c2024;
+    --ink-dim: #5a6169;
+    --line: #dcdad3;
+    --grid: #e9e7e0;
+    --ellipse: #1c6b74;
+    --evolute: #c77d2e;
+    --cusp: #c77d2e;
+    --divider: #9a5a2e;
+    --point-p: #b8432c;
+    --point-seed: #b8432c;
+    --point-converged: #2f7a4d;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --accent-tag-bg: #eef0ea;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #16181b;
+      --panel: #1d2023;
+      --ink: #e8e6e1;
+      --ink-dim: #9a9d9f;
+      --line: #33363a;
+      --grid: #26292c;
+      --ellipse: #5fb8c2;
+      --evolute: #e0a15c;
+      --cusp: #e0a15c;
+      --divider: #d99a5f;
+      --point-p: #e07a5f;
+      --point-seed: #e07a5f;
+      --point-converged: #6fbf8b;
+      --accent-tag-bg: #24272a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181b;
+    --panel: #1d2023;
+    --ink: #e8e6e1;
+    --ink-dim: #9a9d9f;
+    --line: #33363a;
+    --grid: #26292c;
+    --ellipse: #5fb8c2;
+    --evolute: #e0a15c;
+    --cusp: #e0a15c;
+    --divider: #d99a5f;
+    --point-p: #e07a5f;
+    --point-seed: #e07a5f;
+    --point-converged: #6fbf8b;
+    --accent-tag-bg: #24272a;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  body { padding: 28px 28px 64px; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+  }
+  .sub {
+    color: var(--ink-dim);
+    font-size: 14px;
+    margin: 0 0 22px;
+    max-width: 62ch;
+    line-height: 1.5;
+  }
+
+  .stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 18px;
+    align-items: start;
+  }
+  @media (max-width: 880px) {
+    .stage { grid-template-columns: 1fr; }
+  }
+
+  .canvas-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .canvas-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-dim);
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .panel + .panel { margin-top: 14px; }
+  .panel h2 {
+    font-size: 11px;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    color: var(--ink-dim);
+    margin: 0 0 12px;
+    font-weight: 600;
+  }
+
+  .readout { font-family: var(--mono); font-size: 13px; }
+  .readout .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .readout .row:last-child { border-bottom: none; }
+  .readout .row .k { color: var(--ink-dim); }
+  .readout .row .v { text-align: right; }
+
+  .tag {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 5px;
+    background: var(--accent-tag-bg);
+    font-size: 11.5px;
+    font-family: var(--mono);
+  }
+  .tag.outside { color: #1c6b74; }
+  .tag.inside-a { color: var(--point-converged); }
+  .tag.inside-b { color: var(--divider); }
+  :root[data-theme="dark"] .tag.outside,
+  :root:not([data-theme="light"]) .tag.outside { color: var(--ellipse); }
+
+  .controls label {
+    display: block;
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    margin: 12px 0 4px;
+  }
+  .controls label:first-child { margin-top: 0; }
+  .controls input[type="range"] { width: 100%; accent-color: var(--ellipse); }
+  .controls .val { font-family: var(--mono); color: var(--ink); }
+
+  .checks { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .checks label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--ink); margin: 0;
+    cursor: pointer;
+  }
+  .checks input { accent-color: var(--ellipse); }
+
+  .legend { display: flex; flex-direction: column; gap: 7px; margin-top: 2px; }
+  .legend .item { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-dim); }
+  .legend .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+
+  button.reset {
+    margin-top: 14px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-family: var(--sans);
+    cursor: pointer;
+  }
+  button.reset:hover { border-color: var(--ink-dim); }
+
+  .explain {
+    margin-top: 32px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+  @media (max-width: 780px) {
+    .explain { grid-template-columns: 1fr; }
+  }
+  .explain h3 {
+    font-size: 15px;
+    margin: 0 0 8px;
+    font-weight: 650;
+  }
+  .explain p {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--ink-dim);
+    margin: 0 0 12px;
+    max-width: 58ch;
+  }
+  .explain p code, .explain li code {
+    font-family: var(--mono);
+    background: var(--accent-tag-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12.5px;
+    color: var(--ink);
+  }
+  .explain .note {
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    border-left: 2px solid var(--line);
+    padding-left: 10px;
+    margin-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Choosing ω₀</h1>
+  <p class="sub">
+    Move your cursor over the plot to place the point <b>p</b>. The panel on the right shows how
+    the Newton solver's seed angle ω₀ is chosen for that point, and the plot shows why the
+    interior of the ellipse needs a different rule than the exterior.
+  </p>
+
+  <div class="stage">
+    <div class="canvas-card">
+      <canvas id="cv"></canvas>
+      <div class="canvas-foot">
+        <span>drag to move p · touch also works</span>
+        <span id="fpsish">a = 220, b = 130</span>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="panel">
+        <h2>Readout</h2>
+        <div class="readout" id="readout"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Ellipse radii</h2>
+        <div class="controls">
+          <label>a (x-radius) — <span class="val" id="aVal">220</span></label>
+          <input type="range" id="aSlider" min="60" max="320" step="2" value="220">
+          <label>b (y-radius) — <span class="val" id="bVal">130</span></label>
+          <input type="range" id="bSlider" min="60" max="280" step="2" value="130">
+        </div>
+        <button class="reset" id="resetBtn">Reset to defaults</button>
+      </div>
+
+      <div class="panel">
+        <h2>Overlays</h2>
+        <div class="checks">
+          <label><input type="checkbox" id="chkEvolute" checked> Evolute (cusp curve)</label>
+          <label><input type="checkbox" id="chkDivider" checked> Dividing line</label>
+          <label><input type="checkbox" id="chkNewton" checked> Newton path</label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Legend</h2>
+        <div class="legend">
+          <div class="item"><span class="swatch" style="background:var(--ellipse)"></span> ellipse</div>
+          <div class="item"><span class="swatch" style="background:var(--evolute)"></span> evolute / cusps</div>
+          <div class="item"><span class="swatch" style="background:var(--divider)"></span> dividing line</div>
+          <div class="item"><span class="swatch" style="background:var(--point-p)"></span> p (cursor)</div>
+          <div class="item"><span class="swatch" style="background:var(--point-converged)"></span> converged closest point</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="explain">
+    <div>
+      <h3>Exterior points — squash to a circle</h3>
+      <p>
+        For any point outside the ellipse, ω₀ comes from a cheap trick: divide x by a and y by b.
+        That maps the ellipse onto the unit circle, and on a circle the closest point to any
+        external point is trivial — it's just the point normalized. Converting that angle back
+        gives <code>ω₀ = atan2(a·y, b·x)</code>. It isn't the true closest-point angle on the
+        ellipse, but it's close enough that five Newton steps converge cleanly from there.
+      </p>
+      <p>
+        Try dragging p far from the ellipse — the yellow seed point and the green converged point
+        will already sit close together, since the seed is a good approximation out there.
+      </p>
+    </div>
+    <div>
+      <h3>Interior points — why the evolute matters</h3>
+      <p>
+        Every point on the ellipse has a normal line running through it. The <b>evolute</b> is the
+        curve traced by where those normal lines pile up on each other — technically, the locus of
+        centers of curvature. For an ellipse it's an astroid-like curve with four sharp cusps, sitting
+        on the two axes at <code>(±(a²−b²)/a, 0)</code> and <code>(0, ±(a²−b²)/b)</code>.
+      </p>
+      <p>
+        Points strictly inside the ellipse but near this curve are where the "which boundary point
+        is closest" question stops having one obvious answer — nearby interior points can have their
+        closest boundary point suddenly jump from near the (a, 0) vertex to near the (0, b) vertex.
+        A single formula for ω₀ can't track that jump, so Newton needs to be told in advance which
+        side it's on.
+      </p>
+      <p>
+        The code uses a cheap stand-in for that boundary: a straight line through the point (a, b)
+        with slope a/b — shown in orange-brown above. It isn't the exact evolute boundary, just a
+        line close enough to it that it reliably drops the seed on the correct side. Points on one
+        side start at ω₀ = 0 (seeded near the a-vertex); the other side starts at ω₀ = π/2 (seeded
+        near the b-vertex).
+      </p>
+      <div class="note">
+        Turn on "Newton path" and drag p slowly across that orange line — you'll see the seed point
+        (yellow) jump between the two ellipse vertices even though p barely moved, while the actual
+        converged point (green) moves smoothly. That discontinuity in the seed is fine: it's a
+        starting guess, not the answer.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('cv');
+  const ctx = canvas.getContext('2d');
+  const CSS_W = 900, CSS_H = 620;
+
+  let a = 220, b = 130;
+  let px = 260, py = 170; // math-space p (default position)
+  let dragging = false;
+
+  const chkEvolute = document.getElementById('chkEvolute');
+  const chkDivider = document.getElementById('chkDivider');
+  const chkNewton  = document.getElementById('chkNewton');
+  const aSlider = document.getElementById('aSlider');
+  const bSlider = document.getElementById('bSlider');
+  const aVal = document.getElementById('aVal');
+  const bVal = document.getElementById('bVal');
+  const resetBtn = document.getElementById('resetBtn');
+  const readout = document.getElementById('readout');
+  const fpsish = document.getElementById('fpsish');
+
+  function css(varName) {
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  }
+
+  function fitCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = CSS_W * dpr;
+    canvas.height = CSS_H * dpr;
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  fitCanvas();
+  window.addEventListener('resize', fitCanvas);
+
+  const cx = CSS_W / 2, cy = CSS_H / 2 + 10;
+
+  function toCanvas(mx, my) { return [cx + mx, cy - my]; }
+  function toMath(sx, sy) { return [sx - cx, cy - sy]; }
+
+  // ---- core math (mirrors the GLSL) ----
+  function computeW0(x, y, A, B) {
+    const ax = Math.abs(x), ay = Math.abs(y);
+    const outside = (ax*ax)/(A*A) + (ay*ay)/(B*B) > 1.0;
+    let w0, region;
+    if (outside) {
+      w0 = Math.atan2(A*ay, B*ax);
+      region = 'exterior';
+    } else {
+      if (A*(ax - A) < B*(ay - B)) {
+        w0 = Math.PI / 2;
+        region = 'interior-b';
+      } else {
+        w0 = 0;
+        region = 'interior-a';
+      }
+    }
+    return { w0, outside, region };
+  }
+
+  function newtonPath(x, y, A, B, w0, iters) {
+    const ax = Math.abs(x), ay = Math.abs(y);
+    let w = w0;
+    const ws = [w];
+    for (let i = 0; i < iters; i++) {
+      const c = Math.cos(w), s = Math.sin(w);
+      const ux = A*c, uy = B*s;
+      const vx = -A*s, vy = B*c;
+      const dux = ax - ux, duy = ay - uy;
+      const num = dux*vx + duy*vy;
+      const den = (dux*ux + duy*uy) + (vx*vx + vy*vy);
+      w = w + num/den;
+      ws.push(w);
+    }
+    return ws;
+  }
+
+  function signedPoint(w, A, B, x, y) {
+    const sx = x < 0 ? -1 : 1;
+    const sy = y < 0 ? -1 : 1;
+    return [sx*A*Math.cos(w), sy*B*Math.sin(w)];
+  }
+
+  // ---- drawing ----
+  function drawGrid() {
+    ctx.save();
+    ctx.strokeStyle = css('--grid');
+    ctx.lineWidth = 1;
+    const step = 40;
+    for (let gx = cx % step; gx < CSS_W; gx += step) {
+      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, CSS_H); ctx.stroke();
+    }
+    for (let gy = cy % step; gy < CSS_H; gy += step) {
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(CSS_W, gy); ctx.stroke();
+    }
+    ctx.strokeStyle = css('--line');
+    ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(CSS_W, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, CSS_H); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawEllipse(A, B) {
+    ctx.save();
+    ctx.strokeStyle = css('--ellipse');
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let t = 0; t <= Math.PI*2 + 0.001; t += 0.02) {
+      const [sx, sy] = toCanvas(A*Math.cos(t), B*Math.sin(t));
+      if (t === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawEvolute(A, B) {
+    if (!chkEvolute.checked) return;
+    ctx.save();
+    ctx.strokeStyle = css('--evolute');
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    for (let t = 0; t <= Math.PI*2 + 0.001; t += 0.02) {
+      const ex = ((A*A - B*B)/A) * Math.pow(Math.cos(t), 3);
+      const ey = ((B*B - A*A)/B) * Math.pow(Math.sin(t), 3);
+      const [sx, sy] = toCanvas(ex, ey);
+      if (t === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // cusp markers
+    const cx0 = (A*A - B*B)/A;
+    const cy0 = (A*A - B*B)/B;
+    ctx.fillStyle = css('--cusp');
+    [[cx0,0], [-cx0,0], [0,cy0], [0,-cy0]].forEach(([mx,my]) => {
+      const [sx, sy] = toCanvas(mx, my);
+      ctx.beginPath(); ctx.arc(sx, sy, 3.5, 0, Math.PI*2); ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  function drawDivider(A, B) {
+    if (!chkDivider.checked) return;
+    ctx.save();
+    ctx.strokeStyle = css('--divider');
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([2, 5]);
+    const T = 500;
+    [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([sxq, syq]) => {
+      ctx.beginPath();
+      const p1 = toCanvas(sxq*(A - B*(-T)), syq*(B - A*(-T)));
+      const p2 = toCanvas(sxq*(A - B*(T)), syq*(B - A*(T)));
+      ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]);
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  function dot(mx, my, color, r) {
+    const [sx, sy] = toCanvas(mx, my);
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI*2); ctx.fill();
+    return [sx, sy];
+  }
+
+  function line(mx1, my1, mx2, my2, color, dash) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    if (dash) ctx.setLineDash(dash);
+    const [sx1, sy1] = toCanvas(mx1, my1);
+    const [sx2, sy2] = toCanvas(mx2, my2);
+    ctx.beginPath(); ctx.moveTo(sx1, sy1); ctx.lineTo(sx2, sy2); ctx.stroke();
+    ctx.restore();
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, CSS_W, CSS_H);
+    drawGrid();
+    drawEvolute(a, b);
+    drawDivider(a, b);
+    drawEllipse(a, b);
+
+    const { w0, outside, region } = computeW0(px, py, a, b);
+    const ws = newtonPath(px, py, a, b, w0, 5);
+    const wFinal = ws[ws.length - 1];
+
+    // Newton path dots along the ellipse boundary
+    if (chkNewton.checked) {
+      ctx.save();
+      ctx.strokeStyle = css('--ink-dim');
+      ctx.globalAlpha = 0.6;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ws.forEach((w, i) => {
+        const [qx, qy] = signedPoint(w, a, b, px, py);
+        const [sx, sy] = toCanvas(qx, qy);
+        if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+      });
+      ctx.stroke();
+      ctx.restore();
+      ws.forEach((w, i) => {
+        if (i === 0 || i === ws.length - 1) return;
+        const [qx, qy] = signedPoint(w, a, b, px, py);
+        dot(qx, qy, css('--ink-dim'), 2.5);
+      });
+    }
+
+    // seed point
+    const [seedX, seedY] = signedPoint(w0, a, b, px, py);
+    line(px, py, seedX, seedY, css('--point-seed'), [3,3]);
+    dot(seedX, seedY, css('--point-seed'), 5);
+
+    // converged point
+    const [finX, finY] = signedPoint(wFinal, a, b, px, py);
+    line(px, py, finX, finY, css('--point-converged'), null);
+    dot(finX, finY, css('--point-converged'), 5.5);
+
+    // p itself
+    dot(px, py, css('--point-p'), 6);
+
+    const dist = Math.hypot(px - finX, py - finY);
+    const signedDist = outside ? dist : -dist;
+
+    fpsish.textContent = `a = ${a}, b = ${b}`;
+
+    const regionLabel = region === 'exterior' ? 'exterior'
+      : region === 'interior-a' ? 'interior — near a-vertex'
+      : 'interior — near b-vertex';
+    const tagClass = region === 'exterior' ? 'outside' : (region === 'interior-a' ? 'inside-a' : 'inside-b');
+
+    readout.innerHTML = `
+      <div class="row"><span class="k">p</span><span class="v">(${px.toFixed(0)}, ${py.toFixed(0)})</span></div>
+      <div class="row"><span class="k">region</span><span class="v"><span class="tag ${tagClass}">${regionLabel}</span></span></div>
+      <div class="row"><span class="k">ω₀ (seed)</span><span class="v">${(w0*180/Math.PI).toFixed(1)}°</span></div>
+      <div class="row"><span class="k">ω (converged)</span><span class="v">${(wFinal*180/Math.PI).toFixed(1)}°</span></div>
+      <div class="row"><span class="k">closest point</span><span class="v">(${finX.toFixed(1)}, ${finY.toFixed(1)})</span></div>
+      <div class="row"><span class="k">signed distance</span><span class="v">${signedDist.toFixed(1)}</span></div>
+    `;
+  }
+
+  // ---- input ----
+  function setPFromEvent(evt) {
+    const rect = canvas.getBoundingClientRect();
+    const scale = CSS_W / rect.width;
+    const sx = (evt.clientX - rect.left) * scale;
+    const sy = (evt.clientY - rect.top) * scale;
+    const [mx, my] = toMath(sx, sy);
+    px = mx; py = my;
+    render();
+  }
+
+  canvas.addEventListener('pointerdown', (e) => { dragging = true; setPFromEvent(e); });
+  window.addEventListener('pointermove', (e) => { if (dragging) setPFromEvent(e); else if (e.target === canvas) setPFromEvent(e); });
+  window.addEventListener('pointerup', () => { dragging = false; });
+  canvas.addEventListener('pointerleave', () => {});
+
+  aSlider.addEventListener('input', () => { a = +aSlider.value; aVal.textContent = a; render(); });
+  bSlider.addEventListener('input', () => { b = +bSlider.value; bVal.textContent = b; render(); });
+  [chkEvolute, chkDivider, chkNewton].forEach(c => c.addEventListener('change', render));
+  resetBtn.addEventListener('click', () => {
+    a = 220; b = 130; px = 260; py = 170;
+    aSlider.value = a; bSlider.value = b; aVal.textContent = a; bVal.textContent = b;
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
